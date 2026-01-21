@@ -1,23 +1,47 @@
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Grid } from '@react-three/drei';
+import { OrbitControls, Sky } from '@react-three/drei'; // Skyを追加
 import Terrain from './world/Terrain';
+import Vegetation from './world/Vegetation';
 
 function App() {
+  const SEED = 123;
+  const SIZE = 30; // 世界を少し広くしてみましょう
+
   return (
+    // shadows: 影を有効化
     <Canvas
-      camera={{ position: [10, 10, 10], fov: 50 }}
+      shadows 
+      camera={{ position: [15, 15, 15], fov: 45 }}
       style={{ width: '100%', height: '100%' }}
     >
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-      <color attach="background" args={['#333']} />
+      {/* 霧を追加 (色, 開始距離, 終了距離) */}
+      {/* 遠くの境界線をごまかし、空気感を出します */}
+      <fog attach="fog" args={['#cce0ff', 5, 40]} />
 
-      {/* --- 地形コンポーネントを表示 --- */}
-      {/* seedを変えると地形の形が変わります */}
-      <Terrain seed={123} size={20} segments={50} />
+      {/* 空の色を霧と合わせる */}
+      <color attach="background" args={['#cce0ff']} />
 
-      <Grid infiniteGrid fadeDistance={50} sectionColor="#ffffff" cellColor="#888888" position={[0, -2, 0]}/>
-      <OrbitControls />
+      <ambientLight intensity={0.4} />
+      
+      {/* 太陽の光 (castShadowで影を落とす) */}
+      <directionalLight 
+        position={[50, 50, 25]} 
+        intensity={1.5} 
+        castShadow 
+        shadow-mapSize={[2048, 2048]} // 影の解像度
+      >
+        {/* 影を落とす範囲の設定（これがないと影が切れることがあります） */}
+        <orthographicCamera attach="shadow-camera" args={[-20, 20, 20, -20]} />
+      </directionalLight>
+
+      {/* 綺麗な空を表示するコンポーネント */}
+      <Sky sunPosition={[100, 20, 100]} turbidity={0.5} rayleigh={0.5} />
+
+      <Terrain seed={SEED} size={SIZE} segments={120} />
+      <Vegetation seed={SEED} size={SIZE} />
+
+      {/* autoRotate: ゆっくりカメラを回して鑑賞モードに */}
+      <OrbitControls autoRotate autoRotateSpeed={0.5} maxPolarAngle={Math.PI / 2.1} />
     </Canvas>
   );
 }
