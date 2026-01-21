@@ -3,6 +3,13 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Sky } from '@react-three/drei';
 import Terrain from './world/Terrain';
 import Vegetation from './world/Vegetation';
+import PresetSelector from './components/PresetSelector';
+import { PRESETS } from './presets';
+
+// ========================================
+// デフォルト設定
+// ========================================
+const DEFAULT_SEED = 123;
 
 // ========================================
 // カメラ位置・向きの設定 (ここを調整してください)
@@ -24,16 +31,39 @@ function FixedCameraController() {
 }
 
 function App() {
-  const SEED = 123;
   const SIZE = 30;
   
-  const [isOrbitMode, setIsOrbitMode] = useState(false); // false = 固定カメラ, true = 自由カメラ
+  // URLパラメータからseedを取得（なければデフォルト値）
+  const getInitialSeed = () => {
+    const params = new URLSearchParams(window.location.search);
+    const urlSeed = params.get('seed');
+    if (urlSeed) {
+      const parsed = parseInt(urlSeed, 10);
+      if (!isNaN(parsed)) {
+        return parsed;
+      }
+    }
+    return DEFAULT_SEED;
+  };
+
+  const [seed, setSeed] = useState(getInitialSeed);
+  const [currentPreset, setCurrentPreset] = useState('mountain');
+  const [isOrbitMode, setIsOrbitMode] = useState(false);
+
+  const preset = PRESETS[currentPreset];
+
+  // seedが変更されたらURLを更新
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('seed', seed.toString());
+    window.history.replaceState({}, '', url.toString());
+  }, [seed]);
 
   // Ctrl+C でカメラモードをトグル
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.ctrlKey && event.key === 'c') {
-        event.preventDefault(); // ブラウザのコピー動作を防ぐ
+        event.preventDefault();
         setIsOrbitMode((prev) => !prev);
         console.log(`カメラモード切替: ${!isOrbitMode ? '自由カメラ' : '固定カメラ'}`);
       }
@@ -44,39 +74,63 @@ function App() {
   }, [isOrbitMode]);
 
   return (
-    <Canvas
-      shadows 
-      camera={{ 
-        position: isOrbitMode ? [15, 15, 15] : FIXED_CAMERA_POSITION,
-        fov: FIXED_CAMERA_FOV 
-      }}
-      style={{ width: '100%', height: '100%' }}
-    >
-      <fog attach="fog" args={['#cce0ff', 5, 40]} />
-      <color attach="background" args={['#cce0ff']} />
-
-      <ambientLight intensity={0.4} />
+    <>
+      <PresetSelector 
+        currentPreset={currentPreset}
+        onPresetChange={setCurrentPreset}
+        cameraMode={isOrbitMode ? 'orbit' : 'fixed'}
+        seed={seed}
+        onSeedChange={setSeed}
+        defaultSeed={DEFAULT_SEED}
+      />
       
-      <directionalLight 
-        position={[50, 50, 25]} 
-        intensity={1.5} 
-        castShadow 
-        shadow-mapSize={[2048, 2048]}
+      <Canvas
+        shadows 
+        camera={{ 
+          position: isOrbitMode ? [15, 15, 15] : FIXED_CAMERA_POSITION,
+          fov: FIXED_CAMERA_FOV 
+        }}
+        style={{ width: '100%', height: '100%' }}
       >
-        <orthographicCamera attach="shadow-camera" args={[-20, 20, 20, -20]} />
-      </directionalLight>
+        <fog attach="fog" args={[preset.atmosphere.fogColor, preset.atmosphere.fogNear, preset.atmosphere.fogFar]} />
+        <color attach="background" args={[preset.atmosphere.backgroundColor]} />
 
-      <Sky sunPosition={[100, 20, 100]} turbidity={0.5} rayleigh={0.5} />
+        <ambientLight intensity={0.4} />
+        
+        <directionalLight 
+          position={[50, 50, 25]} 
+          intensity={1.5} 
+          castShadow 
+          shadow-mapSize={[2048, 2048]}
+        >
+          <orthographicCamera attach="shadow-camera" args={[-20, 20, 20, -20]} />
+        </directionalLight>
 
-      <Terrain seed={SEED} size={SIZE} segments={120} />
-      <Vegetation seed={SEED} size={SIZE} />
+        <Sky 
+          sunPosition={preset.atmosphere.sunPosition} 
+          turbidity={preset.atmosphere.skyTurbidity} 
+          rayleigh={preset.atmosphere.skyRayleigh} 
+        />
 
-      {/* 固定カメラモードの時はカメラの向きを制御 */}
-      {!isOrbitMode && <FixedCameraController />}
+        <Terrain 
+          seed={seed} 
+          size={SIZE} 
+          segments={120}
+          noiseConfig={preset.noise}
+          terrainConfig={preset.terrain}
+        />
+        
+        <Vegetation 
+          seed={seed} 
+          size={SIZE}
+          noiseConfig={preset.noise}
+          vegetationConfig={preset.vegetation}
+        />
 
-      {/* 自由カメラモードの時だけOrbitControlsを有効化 */}
-      {isOrbitMode && <OrbitControls autoRotate autoRotateSpeed={0.5} maxPolarAngle={Math.PI / 2.1} />}
-    </Canvas>
+        {!isOrbitMode && <FixedCameraController />}
+        {isOrbitMode && <OrbitControls autoRotate autoRotateSpeed={0.5} maxPolarAngle={Math.PI / 2.1} />}
+      </Canvas>
+    </>
   );
 }
 
