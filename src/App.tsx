@@ -1,47 +1,81 @@
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Sky } from '@react-three/drei'; // Skyを追加
+import { useState, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { OrbitControls, Sky } from '@react-three/drei';
 import Terrain from './world/Terrain';
 import Vegetation from './world/Vegetation';
 
+// ========================================
+// カメラ位置・向きの設定 (ここを調整してください)
+// ========================================
+const FIXED_CAMERA_POSITION: [number, number, number] = [-15, 5, -15]; // 南西角から撮影
+// X/Z: 水平位置 (-15～15の範囲で地形の端), Y: 高さ (15～30推奨)
+const FIXED_CAMERA_TARGET: [number, number, number] = [0, 0, 0]; // カメラが向く位置（地形の中心）
+const FIXED_CAMERA_FOV = 45; // 視野角
+
+// 固定カメラの向きを設定するコンポーネント
+function FixedCameraController() {
+  const { camera } = useThree();
+  
+  useFrame(() => {
+    camera.lookAt(...FIXED_CAMERA_TARGET);
+  });
+  
+  return null;
+}
+
 function App() {
   const SEED = 123;
-  const SIZE = 30; // 世界を少し広くしてみましょう
+  const SIZE = 30;
+  
+  const [isOrbitMode, setIsOrbitMode] = useState(false); // false = 固定カメラ, true = 自由カメラ
+
+  // Ctrl+C でカメラモードをトグル
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key === 'c') {
+        event.preventDefault(); // ブラウザのコピー動作を防ぐ
+        setIsOrbitMode((prev) => !prev);
+        console.log(`カメラモード切替: ${!isOrbitMode ? '自由カメラ' : '固定カメラ'}`);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOrbitMode]);
 
   return (
-    // shadows: 影を有効化
     <Canvas
       shadows 
-      camera={{ position: [15, 15, 15], fov: 45 }}
+      camera={{ 
+        position: isOrbitMode ? [15, 15, 15] : FIXED_CAMERA_POSITION,
+        fov: FIXED_CAMERA_FOV 
+      }}
       style={{ width: '100%', height: '100%' }}
     >
-      {/* 霧を追加 (色, 開始距離, 終了距離) */}
-      {/* 遠くの境界線をごまかし、空気感を出します */}
       <fog attach="fog" args={['#cce0ff', 5, 40]} />
-
-      {/* 空の色を霧と合わせる */}
       <color attach="background" args={['#cce0ff']} />
 
       <ambientLight intensity={0.4} />
       
-      {/* 太陽の光 (castShadowで影を落とす) */}
       <directionalLight 
         position={[50, 50, 25]} 
         intensity={1.5} 
         castShadow 
-        shadow-mapSize={[2048, 2048]} // 影の解像度
+        shadow-mapSize={[2048, 2048]}
       >
-        {/* 影を落とす範囲の設定（これがないと影が切れることがあります） */}
         <orthographicCamera attach="shadow-camera" args={[-20, 20, 20, -20]} />
       </directionalLight>
 
-      {/* 綺麗な空を表示するコンポーネント */}
       <Sky sunPosition={[100, 20, 100]} turbidity={0.5} rayleigh={0.5} />
 
       <Terrain seed={SEED} size={SIZE} segments={120} />
       <Vegetation seed={SEED} size={SIZE} />
 
-      {/* autoRotate: ゆっくりカメラを回して鑑賞モードに */}
-      <OrbitControls autoRotate autoRotateSpeed={0.5} maxPolarAngle={Math.PI / 2.1} />
+      {/* 固定カメラモードの時はカメラの向きを制御 */}
+      {!isOrbitMode && <FixedCameraController />}
+
+      {/* 自由カメラモードの時だけOrbitControlsを有効化 */}
+      {isOrbitMode && <OrbitControls autoRotate autoRotateSpeed={0.5} maxPolarAngle={Math.PI / 2.1} />}
     </Canvas>
   );
 }
